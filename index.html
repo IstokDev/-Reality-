@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>StalkZone Web App</title>
+    <!-- Подключаем официальный скрипт Telegram Web Apps -->
+    <script src="https://telegram.org"></script>
+    <style>
+        body { background: #0c0f0c; color: #55d455; font-family: 'Courier New', monospace; padding: 10px; margin: 0; }
+        .pda { max-width: 100%; background: #141914; border: 2px solid #394d39; padding: 15px; display: grid; grid-template-columns: 1fr; gap: 10px; }
+        .screen { background: #060806; border: 1px solid #3a523a; padding: 10px; display: flex; justify-content: space-between; font-size: 13px; }
+        .log-box { height: 180px; background: #040604; border: 1px solid #2b3d2b; padding: 10px; overflow-y: auto; font-size: 13px; }
+        .mmo-chat { height: 120px; background: #030503; border-left: 3px solid #e67e22; padding: 6px; overflow-y: auto; font-size: 11px; color: #f1c40f; }
+        .actions { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .chat-input { display: flex; gap: 5px; }
+        .chat-input input { flex: 1; background: #050705; border: 1px solid #3a523a; color: #55d455; padding: 8px; font-family: inherit; }
+        button { background: #243324; color: #55d455; border: 2px solid #394d39; padding: 10px; cursor: pointer; font-weight: bold; font-family: inherit; text-transform: uppercase; font-size: 11px; }
+        button:hover { background: #394d39; color: #fff; }
+        .accent { color: #2ecc71; font-weight: bold; }
+        .danger { color: #e74c3c; font-weight: bold; }
+    </style>
+</head>
+<body>
+<div class="pda">
+    <div class="screen">
+        <div>
+            <p>👤 Сталкер: <span id="p-name" class="accent">...</span></p>
+            <p>💵 Баланс: <span id="p-money" class="accent">600</span> RU</p>
+        </div>
+        <div>
+            <p>❤️ HP: <span id="p-hp" class="danger">100</span>/100</p>
+            <p>👹 Химера: <span id="boss-hp-label" style="color:#f1c40f;">2500</span></p>
+        </div>
+    </div>
+    <div class="log-box" id="log-box"><p>[СИСТЕМА]: Синхронизация КПК...</p></div>
+    <div class="mmo-chat" id="chat-box"></div>
+    <div class="chat-input">
+        <input type="text" id="chat-txt" placeholder="Сообщение в сеть...">
+        <button onclick="sendChat()">Текст</button>
+    </div>
+    <div class="actions">
+        <button onclick="goRaid()">🔍 В рейд</button>
+        <button onclick="hitBoss()">👹 МУТАНТ</button>
+    </div>
+</div>
+<script>
+    // Автоматически берем настоящее имя игрока из его профиля в Telegram!
+    let tg = window.Telegram.WebApp;
+    tg.expand(); // Разворачиваем приложение на весь экран телефона
+    let myName = tg.initDataUnsafe.user ? tg.initDataUnsafe.user.first_name : "Сталкер_" + Math.floor(Math.random()*800);
+
+    // ⚠️ ВПИШИ СВОЙ ВНЕШНИЙ IP-АДРЕС С САЙТА 2IP.RU
+    const SERVER_IP = "localhost"; 
+    const SERVER_URL = `http://${SERVER_IP}:8000`;
+
+    let p = { hp: 100, money: 600, art: null };
+
+    function log(text) {
+        const box = document.getElementById('log-box');
+        box.innerHTML += `<p>${text}</p>`;
+        box.scrollTop = box.scrollHeight;
+    }
+
+    async function syncWorld() {
+        try {
+            let res = await fetch(`${SERVER_URL}/state`);
+            let state = await res.json();
+            document.getElementById('boss-hp-label').innerText = state.boss_hp;
+            const chatBox = document.getElementById('chat-box');
+            chatBox.innerHTML = "";
+            state.chat.slice(-8).forEach(msg => { chatBox.innerHTML += `${msg}<br>`; });
+        } catch(e) {}
+        setTimeout(syncWorld, 2000);
+    }
+
+    async function sendAction(data) {
+        try {
+            await fetch(`${SERVER_URL}/action`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name: myName, ...data })
+            });
+        } catch(e) {}
+    }
+
+    async function sendChat() {
+        const input = document.getElementById('chat-txt');
+        let txt = input.value.trim();
+        if(!txt) return;
+        input.value = "";
+        await sendAction({ type: "chat", text: txt });
+    }
+
+    async function hitBoss() {
+        let dmg = Math.floor(Math.random() * 40) + 20;
+        log(`👹 Нанесено Химере: ${dmg} урона.`);
+        await sendAction({ type: "boss_hit", dmg: dmg });
+    }
+
+    function goRaid() {
+        let m = Math.floor(Math.random() * 50) + 20; p.money += m;
+        log(`🔎 Найдена заначка: +${m} RU.`);
+        updateLocalUI();
+    }
+
+    function updateLocalUI() {
+        document.getElementById('p-name').innerText = myName;
+        document.getElementById('p-hp').innerText = p.hp;
+        document.getElementById('p-money').innerText = p.money;
+    }
+
+    updateLocalUI();
+    syncWorld();
+</script>
+</body>
+</html>
